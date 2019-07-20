@@ -1,0 +1,272 @@
+README file for SISR (as of SnortSnarf v021111.1)
+-------------------------------------------------
+
+This is a first attempt at documenting SISR and it is quite possible I have
+forgotten something important.  Please let me (hoagland@SiliconDefense.com)
+know if you see something I need to explain better.  Also please consider
+SISR to be experimental.
+
+
+Overview
+--------
+SISR is the SnortSnarf Incident Storage and Reporting mechanism.  Starting
+with a link in a SnortSnarf page, you can record sets of alerts, create
+"incident"s from them, and send e-mail reports based on templates from
+incidents.  It was added to SnortSnarf since we wanted a way to speed up the
+creation of reports of incidents we noticed on our clients' networks.
+
+Some features we hope you (or someone) will find useful:
++ ability to customize the fields recorded with an incident
++ ability to create your own report templates based on these fields
++ ability to select the report template(s) to send for an incident
++ ability to add notes about an incident whenever desired 
+
+
+Basic Usage
+-----------
+Given some alerts you wish to create a report from, this is roughly the
+process you follow:
+
+1.  From a page with the alerts, click on the link to add some fo the alerts
+to a labeled set link.  This will show you a list of the alerts on the page
+you were on.  (Actually as it does a fresh grep through the alert input
+sources you provided to snortsnarf.pl, it will show you the alerts that would
+be shown on that page if SnortSnarf were rerun on the same input.)
+
+2.  Select the alerts you want included in the labeled set you are creating,
+or leave "select all alerts" checked.  Name the set and click on the
+"add/create" button.  You can repeat these two steps to add alerts found on
+multiple pages though you may end up with duplicate entries; just give the
+same set name.
+
+3.  From the page displaying the labeled set you created, click on the
+"create incident" link.
+
+4.  That produced a form for creating an incident.  This form contains
+several fields, some of which will be filled in with default text based on
+the set of alerts that this incident is in regards to.  Look over all these
+carefully, even those filled in already; these will be used in creating
+reports and these is currently no way to edit these later through SISR
+(though you can use a XML editor).   When done, click on the "create
+incident" button.
+
+5.  From the page displaying the incident information, chose a template you
+wish to create a report from from the pop-up menu and select "create".
+
+6.  This produces a form for sending e-mail.  Edit the headers and body of
+the e-mail message.  When you are ready to send the e-mail, click on "send
+mail"; this causes the e-mail to be sent out and an annotation to be added
+to the incident.  Repeat these last two steps for additional reports.
+
+To review existing labeled alert sets or incidents, click on the appropriate
+"List" link on the top of an IP page.  (You may also wish to bookmark these
+links.)
+
+
+Installation
+------------
+There are three external pieces of software you will need to install to use
+SISR, all available without cost:
+
+1) XML::Parser by Larry Wall and Clark Cooper (also needed for the
+annotation feature of SnortSnarf).  Available from CPAN, e.g.,
+http://www.perl.com/CPAN-local/modules/by-module/XML/.
+
+2) Mail::Sendmail by Milivoj Ivkovic (mi@alma.ch).  Available from CPAN,
+e.g., http://www.perl.com/CPAN-local/modules/by-module/Mail/.  Be sure to
+check to make sure you have the mail host set correctly at the top of the
+module.
+
+3) The HTML Form Processing Modules (HFPM) and Pipeline by Jim Hoagland
+(hoagland@cs.ucdavis.edu).  (Note that this is same person as one of the
+authors of SnortSnarf but the software is not directly associated with
+Silicon Defense, which maintains and holds copyright to SnortSnarf; it is
+maintained independently.)  Be sure to indicate that you want to get on the
+HFPM announcement list as a recommended new version is forthcoming as of
+this writing and will be announced there.
+
+  http://seclab.cs.ucdavis.edu/~hoagland/hfpm/
+  http://seclab.cs.ucdavis.edu/~hoagland/pipeline/
+
+Place the CGI scripts in sisr/cgi/ in your CGI directory of your web server.
+The files in sisr/include should be placed in a directory where Perl will
+find it when executing CGI scripts, e.g., in your "site_perl" Perl lib
+directory.  Copy the sisr/modules directory to someplace reachable by the
+Pipeline CGI script when running.  Next run the
+utilities/setup_sisrdb_dir.pl script to create the directory and files that
+SISR will need to be modifying (you can put them in the same directory as
+annotations are stored in).  These are the labeled alert set file, the
+incident file, and (optionally) the default set name file.
+
+Now you will need to set up the SISR configuration file.  This file is used
+by the different parts of SISR when executing and is given to snortsnarf.pl
+with the -sisr option to cause it to generate SISR links.  An example is
+available in the distribution as sisr/ex-sisr.config.  See the next section
+for the format and semantics of your SISR config file.
+
+A couple notes regarding HFPM/Pipeline and SISR.  As distributed, the only
+part of the HFPM download that is needed (in this version of SISR) is the
+notempty.pl module and Pipeline (pipeline.pl).  You will need to configure
+Pipeline to use the modules included with SISR (in sisr/modules/ in the
+SnortSnarf distribution).  You might find the sisr/sisr_modlist list of SISR
+modules useful in configuring Pipeline.
+
+
+The SISR configuration file
+---------------------------
+The SISR configuration file is accessed by different parts of SISR at run
+time.  It contains information on how SISR is installed and used on your
+particular site.
+
+File format.  Empty lines and lines beginning with a "#" are ignored.  All
+other lines are expected to be in the format "parameter: value" or
+"parameter subparamater: value".
+
+Parameters.  All of these parameters need to be defined in the configuration
+file.  All directory and file names need to be full paths.  Here is a list:
+
+  + set-db-loc: your labeled set database file
+
+  + inc-db-loc: your incident database file
+
+  + ann-db-loc: your SnortSnarf annotations file (if defined, annotations
+  are made when creating an alert set)
+
+  + report-tmpl-dir-mail: directory containing your mail templates
+
+  + set-name-default: the default set name or a file to get it from
+
+  + module-path: module path to give to Pipeline, should include dirs for
+  HFPM and SISR modules
+
+  + ifield: the required subparamater is the name of an incident file you
+  want and the right side is a description of the field to present to the
+  user and to record with the field; this is repeated with each field you
+  wish to define
+  
+  + inc-field-calc-pipe: pipeline of modules to auto-fill in incident
+    fields; see the section on filling in incident fields below
+
+
+Customizing report templates
+----------------------------
+It is pretty easy to create your own mail templates (assuming you know what
+you want to have in the e-mail :) ).  Copy and modify the example
+(sisr/ex-report.txt) for a quick start.  All files in the directory given in
+the configuration file ('report-tmpl-dir-mail' parameter) are considered
+mail templates and included on this presented list (unless the file name
+starts with a '.' or end with a '~').
+
+There are three sections to a template file: the template information
+section, the headers, and the mail body.  These are separated by one or more
+blank lines.
+
+The template information section provides information about the template. 
+This is the only part of the file that is not used as the template source
+when using the template.  The format is "parameter: value".  The only
+parameter defined at present is 'Description', which is a description of the
+template.  This is shown in the pop-up menu.  All other fields are ignored.
+
+You can define arbitrary mail headers in the header section.  The format is
+"header: content".  For example "Subject: There was an incident".
+
+The body of the message and the mail header contents are filled in with the
+incident fields.  '$field1' gets replaced with the contents of the field
+with the name 'field1' and '$$' with '$'.  If for some reason you want to
+access the environmental variables of the incident creation submission, you
+can get those by prefixing their name with '%'.  For a literal '%', type
+'%%'.
+
+In addition to the text fields defined with 'ifield' in the configuration
+file, the following incident fields are available for instantiation:
+
+  + name: incident name
+  + creator: incident creator
+  + created: incident creation time
+  + event_set_name: name of the labeled alert set this incident refers to
+  + event_set_loc: URL of the database file containing that alert set
+
+
+Customizing incident fields
+---------------------------
+To add, modify, or delete the incident fields stored with an incident,
+simply edit the 'ifield' entries in the SISR configuration file.  The word
+after 'ifield' is the name of the field and the part after the colon is the
+description.  This description is the user-friendly version of the incident
+field.
+
+By design, the defined incident fields may be changed at any time without
+harming access to existing incidents.
+
+
+Customizing automatically filling in of incident fields
+-------------------------------------------------------
+The procedure followed in filling in the default values for incident fields
+is defined in the configuration file by the 'inc-field-calc-pipe' parameter.
+Consider this a pipeline for Pipeline to execute (though in reality it is
+only part of what is actually done).  See:
+
+  http://seclab.cs.ucdavis.edu/~hoagland/pipeline/
+
+and especially:
+
+  http://seclab.cs.ucdavis.edu/~hoagland/pipeline/usage.html#pipeline
+  
+This arranges for several modules to be run in order.  These modules are
+used to set up the incident fields.  After this pipeline is complete, the
+default value for a field will be obtained from the field with the same
+name.  You can use SISR modules to set these up, use HFPM modules, or write
+your own modules.
+
+For those modules that require the details of alerts from the labeled set
+associated with the incident, it is available in the environmental variable
+'events'.
+
+Here is a brief summary of the SISR modules included that you can use for
+setting these fields.  For more details, see the top of the module file.
+
+  + set_field_summation.pl: summarizes the distinct values for a given alert
+  field among alerts in a labeled set
+
+  + set_flags.pl: like set_field_summation.pl, but specialized for flags
+
+  + nets_from_ips.pl: from a field with IP addresses, put the distinct
+  networks (using a certain netmask) in a new field
+
+  + earliest_latest_times.pl: extracts the earliest and latest times among
+  the alerts and stores those designated fields
+
+  + whois_lookup.pl:  uses IPAddrContact.pm to try to set a field to a
+  contact e-mail address for a given IP address using whois databases
+
+Typically, the parameters to these can be from fields and environmental
+variables defined earlier and are so included by prefixing a field name with
+a '$' and an environmental variable with a '%'.  Output location
+specification typically take pretty much the same form.  Here is an example
+module use:
+
+  nets_from_ips.pl $dip $dnet 24
+
+This will cause the module nets_from_ips.pl to be run.  Its arguments are
+'$dip', '$dnet', and '24'.  It interprets this as getting the IP address
+from the string in the field 'dip', setting the field 'dnet' to the networks
+extracted, and using a 24 bit network size.
+
+It is not that difficult to write your own custom modules.  See:
+
+http://seclab.cs.ucdavis.edu/~hoagland/pipeline/moddev.html
+
+for how to write modules.  It is probably easiest to start with an existing
+module and modify it.
+
+
+Contributions
+-------------
+We welcome your complaints, kudos, and especially improvements and bugfixes.  
+We wish for this to be a useful as possible, so your feedback and assistance
+is important.  You may reach us at hoagland@SiliconDefense.com.
+
+-- Jim Hoagland (hoagland@SiliconDefense.com)
+
+6 April 2001
+

@@ -1,0 +1,569 @@
+#!/usr/bin/perl 
+
+# The SnortDBInput web page can be found at
+# http://www.bus.utexas.edu/services/cbacc/dbsupport/snortdbinput
+
+# SnortDBInput is an implentation of the SnortSnarf Input API which reads
+# its input from databases produced by Snort using the database output plugin.Ê
+# Presently it has been tested with mysql 3.22 and 3.23.
+
+# Input to this module done by sending a switch to the main program in the
+# following format:
+#     user:password@database@host:port
+# If you had a user snort with password Password at host 1.2.3.4 with
+# a database called snort18, your connection string would be:
+#     snort:Password@snort18@1.2.3.4
+# If you do not use a password for your snort user the same string would be:
+#     snort:@snort18@1.2.3.4
+
+# based in part on SnortFileInput.pm
+
+# Please send complaints, kudos, and especially improvements and bugfixes to
+# Ed.Davison@bus.utexas.edu.  As described in GNU General Public License, no
+# warranty is expressed for this program.
+
+package SnortDBInput;
+
+use MemAlert;
+use MemPacket;
+use Filter;
+use Mysql;
+use Socket;
+use Time::ParseDate;
+
+my $debug = 0;
+
+sub BEGIN {
+    @cap_tasks= qw(snort spp_portscan spade);
+    %cap_tasks= ();
+    foreach (@cap_tasks) {
+        $cap_tasks{$_}= 1;
+    }
+}
+
+# Ed: not sure if database provides you cross reference information; I would imagine so.  If not, you can use rulesource like SnortFileInput does.
+sub ref_to_url {
+    my($cite,$id)= @_;
+    return undef unless defined($cite) && defined($id);
+    if ($cite eq 'arachnids') {
+        $id =~ s/^0+//;
+        return "http://whitehats.com\/IDS\/IDS$id";
+    } elsif ($cite eq 'bugtraq') {
+        return "http://www.securityfocus.com/bid/$id";
+    } elsif ($cite eq 'cve') {
+        return "http://cve.mitre.org/cgi-bin/cvename.cgi?name=$id";
+    } elsif ($cite eq 'mcafee') {
+        return "http://vil.nai.com/vil/dispVirus.asp?virus_k=$id";
+    } elsif ($cite eq 'sid') {
+        return "http://www.snort.org/snort-db/sid.html?id=$id";
+    } elsif ($cite eq 'url') {
+        return "http://$id";
+    } else {
+        return undef;
+    }
+}
+
+########## API functions ##############
+
+# API 'new' function to create an instance
+sub new {
+    my($class,$paramsref,$tasksref,$filter,@inputs)= @_;
+    my(%tasks)= ();
+    foreach (@{$tasksref}) {
+        $tasks{$_}= 1 if $_ eq 'all' || defined($cap_tasks{$_});
+    }
+
+    my $dbmin = undef;
+    my $dbmax = undef;
+    
+    my @filters= (ref($filter) eq 'AndFilter') ? @{$filter} : ($filter);
+    my @unhfilters= ();
+    foreach (@filters) {
+        my $time= &Filter::known_mintime_filter($_);
+        if (defined($time)) {
+            $dbmin= $time;
+            next;
+        }
+        $time= &Filter::known_maxtime_filter($_);
+        if (defined($time)) {
+            $dbmax= $time;
+            next;
+        }
+        push(@unhfilters,$_);
+    }
+    my $myfilter= @unhfilters
+        ? (@unhfilters > 1
+            ? AndFilter->new(@unhfilters)
+            : $unhfilters[0])
+        : TrueFilter->new();
+    
+    my @ins= ();
+    # @inputs is the text list of databases to grab stuff from, each in the form user:passwd@name@host:port
+    my($lhs,$rhs,$user,$pass,$dbname,$hostport,$host,$port);
+    foreach (@inputs) {
+        ($lhs,$rhs)= split('@',$_,2);
+        ($user,$pass)= split(':',$lhs,2);
+        $pass= '' unless defined($pass);
+        ($lhs,$rhs)= split('@',$rhs,2);
+        if (defined($rhs)) {
+            $dbname= $lhs;
+            $hostport= $rhs;
+        } else {
+            $dbname= 'snort'; 
+            $hostport= $lhs;
+        }
+        if ($hostport =~ /^(.*)\:(\d+)$/) {
+            $host= $1;
+            $port= $2;
+        } else {
+            $host= $hostport;
+            $port= 3306; 
+        }
+        #encode the password by replacing ';' with \001; we assume \001 is not in the password string
+        $pass =~ tr/\;/\001/;
+        push(@ins,join(';',$user,$pass,$dbname,$host,$port));
+    }
+    
+    my $self= bless {
+        'tasks' => \%tasks, # requested tasks are the keys
+        'filter' => $filter, # original filter
+        'myfilter' => $filter, # filter to apply
+        'str' => undef, # recreate string
+        'inputsleft' => \@ins, # databases not yet processed, each in the form user;passwd;name;host;port
+        'dbh' => undef,
+        'dbmin' => $dbmin,
+        'dbmax' => $dbmax,
+        'dbtext' => '' # for alert 'source' fields
+    }, $class;
+
+    # get opts
+    my @params= ();
+    
+    # if at some point there is a general user specified option not tied to a particular input source (for example in SnortFileInput the user can indicate how to infer an alerts year), e.g. 'foo', you would put that into the 'opts' hash with something like this
+#    foreach (keys %$paramsref) {
+#        if (/^foo$/) {
+#            $self->{'opt'}{$_}= $paramsref->{$_};
+#        } else {
+#            warn "new: paramater $_ with value $paramsref->{$_} not understood, ignoring\n";
+#            next;
+#        }
+#        push(@params,"$_:".$paramsref->{$_});
+#    }
+    
+    # make the recreate string
+    my $paramstr= &Filter::join_strs(@params);
+    $self->{'str'}= &Filter::join_strs(join(',',keys %tasks),&Filter::as_str($filter),$paramstr,@inputs);
+
+    # set up per opts
+
+    # don't do much here, we don't even know if get() is going to be called, maybe on recreate_str() is
+
+    return $self;
+}
+
+
+sub recreate {
+    my($class,$recreate_str)= @_;
+    my($tasks,$filterstr,$params,@inputs)= &Filter::unjoin_strs($recreate_str);
+    my @tasks= split(',',$tasks);
+    my $filter= &Filter::from_str($filterstr);
+    die "failed to recreate filter from string: $filterstr\n" unless defined($filter);
+    my %params= map(split(':',$_,2),&Filter::unjoin_strs($params));
+    return $class->new(\%params,\@tasks,$filter,@inputs);
+}
+
+sub recreate_str {
+    return $_[0]->{'str'};
+}
+
+sub task_capability {
+    return @cap_tasks;
+}
+
+sub get {
+    my $self= shift;
+
+    # debug EBD
+    #print "* Entering get() routine\n";
+    #my $a = `free | grep Mem`;
+    #print "* $a";
+    
+    my $got_an_alert= 0;
+    do {
+        # open a new input source unless one is open (indicated by !defined($self->{'dbh'}))
+        while (!defined($self->{'dbh'})) {
+            # need to move to a new input source
+            my $curinput= $self->{'curinput'}= shift(@{$self->{'inputsleft'}});
+            return undef if (!defined($curinput)); # ran out of inputs; we're done!
+            
+            # log the new data source
+#            open D, ">>.SnortDBInput.log";
+#            print D "--------------------------------------\n";
+#            my $d = `date`;
+#            print D $d . "\n\n";
+#                print D "Starting new DB data source: " . $curinput . "\n";
+#                print D "Filter specified: " . $self->{'filter'} . "\n";
+#            close D;
+
+            my ($user,$pwd,$db,$host,$port)= split(';',$curinput);
+            $pwd =~ tr/\001/\;/; # decode encoded password
+            $self->{'dbtext'}= "$user\@$db\@$host:$port";
+
+            #debug EBD
+            #print "* Connecting to $host as $user\n";
+        
+            $dbh = Mysql->connect($host,$db,$user,$pwd);
+            if (!defined $dbh) {
+                warn "Error connecting to $host as $user; skipping\n";
+                next;
+            }
+            # got it open okay
+            $self->{'dbh'} = $dbh;
+            
+            # possible todo: check to see if the database follows the expected schema
+            # if ($db_schema != $our_schema) {
+            #     warn "$curinput has schema $db_schema, but we only know $our_schema, we'll see how well this works";
+            # }
+            
+            # get sth_event, num_rows, rowcount ready for cycling through the database
+
+            $q_event = "select sid, cid from event";
+
+            if (defined($self->{'dbmin'})) {
+                if ($q_event =~ /where/) {
+                    $q_event .= " and ";
+                } else {
+                    $q_event .= " where ";
+                }
+                $q_event .= " unix_timestamp(timestamp) >= " . $self->{'dbmin'};
+            }
+
+            if (defined($self->{'dbmax'})) {
+                if ($q_event =~ /where/) {
+                    $q_event .= " and ";
+                } else {
+                    $q_event .= " where ";
+                }
+                $q_event .= " unix_timestamp(timestamp) <= " . $self->{'dbmax'};
+            }
+
+            # debug EBD
+            #print "* Staring query: $q_event\n";
+    
+            my $sth_event = $dbh->query($q_event);
+    
+            # debug EBD
+            #print "* Complete with query\n";
+            #my $a = `free | grep Mem`;
+            #print "* $a";
+    
+            my $total_rows = $sth_event->numrows;
+        
+            # debug EBD
+            #print "Total rows: $total_rows\n";
+#        open D, ">>.SnortDBInput.log";
+#            print D "Total rows in event table: " . $total_rows . "\n";
+#        close D;
+    
+            $self->{'sth_event'} = $sth_event;
+            $self->{'num_rows'} = $total_rows;
+            $self->{'rowcount'} = 0;
+        }
+        # we now have an open database
+        
+        # get an alert from $self->{'dbh'}
+        my $total_rows = $self->{'num_rows'};
+        my $rowcount = $self->{'rowcount'};
+        my $sth_event = $self->{'sth_event'};
+
+        # debug EBD
+        #printf "* Current row = %d (%5.2f %%)\n", $rowcount, ($rowcount/$total_rows);
+ 
+        @query_results = $sth_event->fetchrow;
+    $self->{'rowcount'} = $rowcount + 1;
+    
+#        # debug EBD
+#        if ($rowcount > 500000) {
+#            # debug EBD
+#    
+#            return undef;
+#        }
+
+        # debug EBD
+#        if (!($rowcount % 50000)) {
+#        open D, ">>.SnortDBInput.log";
+#            print D "* Current row:" . $rowcount . "\n";
+#        close D;
+#        }
+
+        unless (@query_results) { # ran out of events here
+            # clean up database here
+            $self->{'sth_event'}= undef;
+            $self->{'dbh'}= undef; # indicate that we need a new input source
+        } else {
+            $alert = $self->make_alert($query_results[0],$query_results[1]);
+            if (defined $alert) {
+                # debug EBD
+                #print "* Alert is valid\n";
+                #print "* Alert: ".$alert."\n";
+                #$alert->debug_print('*   ',STDOUT);
+                $got_an_alert=
+                    (defined($self->{'tasks'}{'all'})
+                    || defined($self->{'tasks'}{$alert->type()})) # make sure it matches one of our tasks
+                    && $self->{'myfilter'}->test($alert); # make sure it passes our filter too
+            } else {
+            $got_an_alert = undef;
+            }
+            unless ($got_an_alert) {
+                # debug EBD
+#                open D, ">>.SnortDBInput.log";
+#                print D "* alert did not pass type test of the filter test\n";
+#                close D;
+            }
+        }
+    } until ($got_an_alert);
+
+    # debug EBD
+#    if (!defined $alert) {
+#        open D, ">>.SnortDBInput.log";
+#        print D "* alert undefined\n";
+#        close D;
+#    }
+        
+    return $alert;
+}
+
+########## end of API functions ##############
+
+
+# if this parsed or unparsed alert is an anomaly report, return the anomaly
+# score otherwise return undef
+sub is_anom_rept {
+    my($alert)= shift;
+    my $text= ref($alert) ? $alert->{'sig'} : $alert;
+    $text = " ";
+    if ($text =~ /(spp_anomsensor|Spade):\s*Anom[ao]ly threshold exceeded:\s*(\d+\.\d+)/i) {
+        return $2;
+    } else {
+        return undef;
+    }
+}
+
+# parses given sid, cid in snort db into an instance of MemAlert
+sub make_alert {
+    my($self,$sid,$cid)= @_;
+
+    # debug EBD
+    #print "** Entering make_alert() routine\n";
+
+    my $aid = "snortdb:".$sid.":".$cid;
+    my $dbh = $self->{'dbh'};
+
+    #some default values
+    my $src_port = 0;
+    my $dst_port = 0;
+
+    my $alert = MemAlert->new($aid);
+    my $pkt = MemPacket->new();
+    $alert->add_packets($pkt);
+    $alert->set('source' => $self->{'dbtext'}.'-'."$sid:$cid");
+
+    # debug EBD
+    #print "** Grabbing alert for cid = $cid and sid = $sid\n";
+
+    my $q = "select * from event where cid = $cid and sid = $sid";
+    my $sth = $dbh->query($q);
+    my @event = $sth->fetchrow;
+    my ($datetext,$timetext) = split / /, $event[3];
+    my ($year,$month,$day) = split /-/, $datetext;
+    my $utime = Time::ParseDate::parsedate($event[3], 'FUZZY' => 1);
+    $alert->set('utime' => $utime);
+
+    # debug EBD
+    #open D, ">>.TimeFilter.log";
+    #print D "** utime real: ".$utime." alert value: ".$alert->utime()."\n";
+    #close D;
+        
+    # debug EBD
+    if ($debug) {
+        print "SID: ".$event[0]."\n";
+        print "CID: ".$event[1]."\n";
+        print "Date: ".$datetext."\n";
+        print "Time: ".$timetext."\n";
+        print "Sig_ID: ".$event[2]."\n";
+    }
+
+    # debug EBD
+    if ($debug) {
+        print "** Grabbing signature data for sig_id = $event[2]\n";
+    }
+
+    $q = "select * from signature where sig_id = $event[2]";
+    $sth = $dbh->query($q);
+    my @signature = $sth->fetchrow;
+    my $priority = $signature[3];
+    if (defined($signature[5])) {
+        my $url= &ref_to_url('sid',$signature[5]);
+        $alert->add_ref('sid',$signature[5],$url);
+    }
+    my $sig_text = $signature[1];
+
+    # debug EBD
+    #print "** Signature: ".substr($sig_text,0,50)."\n";
+
+    my $anom= &is_anom_rept($sig_text);
+    if (defined($anom)) {
+        $pkt->set('anom' => $anom);
+        $alert->set('type' => 'spade');
+    } else {
+        $pkt->set('anom' => undef);
+        if ($sig_text =~ /spp_portscan/) {
+            $alert->set('type' => 'spp_portscan');
+            return undef;
+        } else {
+            $alert->set('type' => 'snort');
+        }
+    }
+
+    # debug EBD
+    #print "** Grabbing iphdr info for cid = $cid and sid = $sid\n";
+
+    #$q = "select sid,cid,inet_ntoa(ip_src),inet_ntoa(ip_dst),ip_proto from iphdr where cid = $cid and sid = $sid";
+    $q = "select sid,cid,inet_ntoa(ip_src),inet_ntoa(ip_dst),ip_ver,ip_hlen,ip_tos,ip_len,ip_id,ip_flags,ip_off,ip_ttl,ip_proto,ip_csum from iphdr where cid = $cid and sid = $sid";
+    $sth = $dbh->query($q);
+    my @iphdr = $sth->fetchrow;
+    my $src_address = $iphdr[2];
+    my $dst_address = $iphdr[3];
+    my $protocol = $iphdr[12];
+    my $ttlstuff = "TTL:" . $iphdr[11] . " TOS:" . $iphdr[6] . " ID:" . $iphdr[8];
+    $ttlstuff = $ttlstuff . " IpLen:" . $iphdr[5] . " DgmLen:" . $iphdr[7];
+
+    my $otheropts= '';
+    my $prototext= "PROT$protocol";
+    $src_port= undef;
+    $dst_port= undef;
+    if ($protocol == 1) {
+        # ICMP protocol
+        # debug EBD
+        #print "** Grabbing icmphdr for cid = $cid and sid = $sid\n";
+
+        $q = "select * from icmphdr where cid = $cid and sid = $sid";
+        $sth = $dbh->query($q);
+        my @icmphdr = $sth->fetchrow;
+        $pkt->set('protocol' => 'ICMP');
+        $prototext = "ICMP";
+        # add code to decode icmp_type into string
+        $pkt->set('flags' => $icmphdr[2]);
+        $otheropts = "Type:" . &numtext($icmphdr[2]) . " Code:" . &numtext($icmphdr[3]);
+        $otheropts = $otheropts . " ID:" . &numtext($icmphdr[5]) .
+                                " Seq:" . &numtext($icmphdr[6]);
+    }
+
+    if ($protocol == 6) {
+        # TCP protocol
+        # debug EBD
+        #print "** Grabbing tcphdr for cid = $cid and sid = $sid\n";
+
+        $q = "select * from tcphdr where cid = $cid and sid = $sid";
+        $sth = $dbh->query($q);
+        my @tcphdr = $sth->fetchrow;
+        $src_port = $tcphdr[2];
+        $dst_port = $tcphdr[3];
+        $pkt->set('protocol' => 'TCP');
+        $prototext = "TCP";
+        my $flags= &tcpflags_num_to_str($tcphdr[8]);
+        $pkt->set('flags' => $flags);
+        $otheropts = $flags . " Seq:" . &numtext($tcphdr[4]) . " Ack:" . &numtext($tcphdr[5]);
+        $otheropts = $otheropts . " Win:" . &numtext($tcphdr[9]);
+    }
+    
+    if ($protocol == 17) {
+        # UDP protocol
+        # debug EBD
+        #print "** Grabbing udphdr for cid = $cid and sid = $sid\n";
+
+        $q = "select * from udphdr where cid = $cid and sid = $sid";
+        $sth = $dbh->query($q);
+        my @udphdr = $sth->fetchrow;
+        $src_port = $udphdr[2];
+        $dst_port = $udphdr[3];
+        $pkt->set('protocol' => 'UDP');
+        $prototext = "UDP";
+        $otheropts = "";
+    }
+
+    if (defined($signature[2])) {
+        # debug EBD
+        #print "** Grabbing sig_class for sig_class_id = $signature[2]\n";
+
+        $q = "select * from sig_class where sig_class_id = $signature[2]";
+        $sth = $dbh->query($q);
+        my @classinfo = $sth->fetchrow;
+        my $classification = $classinfo[1];
+        $alert->set('classification_text' => $classification);
+    }
+
+    $alert->set('message' => $sig_text);
+    $alert->set('priority_num' => $priority);
+    $pkt->set('sip' => $src_address, 'dip' => $dst_address, 
+        'sport' => $src_port, 'dport' => $dst_port,
+        'month' => $month, 'day' => $day, 'tod_text' => $timetext,
+        'year' => $year
+    );
+    
+    my $alert_text = "[**] $sig_text [**]\n";
+    #push (@ptext, "[**] $sig_text [**]");
+    my $pkt_text = "$datetext:$timetext ";#[smac] -> [dmac] type:[val] len:[val]\n";
+    #push (@ptext, "$datetext:$timetext [smac] -> [dmac] type:[val] len:[val]");
+    $pkt_text = $pkt_text . "$src_address";
+    $pkt_text = $pkt_text . ":$src_port" if defined($src_port);
+    $pkt_text = $pkt_text . " -> $dst_address";
+    $pkt_text = $pkt_text . ":$dst_port" if defined($src_port);
+    $pkt_text = $pkt_text . "\n";
+    #push (@ptext, "$src_address:$src_port -> $dst_address:$dst_port ");
+    $pkt_text = $pkt_text . $prototext . " " . $ttlstuff;
+    #push (@ptext, $prototext . " " . $ttlstuff);
+    $pkt_text = $pkt_text . "\n" . $otheropts if length($otheropts);
+    #push (@ptext, $otheropts);
+    $alert_text.= $pkt_text;
+#print "got: $alert_text\n";
+    
+    $pkt->set('text' => $pkt_text, 'text_format' => 'snortdb-full-pkt');
+    $alert->set('text' => $alert_text, 'text_format' => 'snortdb-full-alert');
+#    $pkt->set('as_text' => @ptext);
+#    $alert->set('text_format' => $pkt_text);
+    
+    # maybe we also want some code to retrieve cross refernces and store those in the alert
+    # using ref_to_url() above to get the URL if needed
+    
+    
+#    $alert->add_packets($pkt);
+
+    # debug EBD
+    #print "** Leaving make_alert() routine\n";
+
+    return($alert);
+}
+
+sub tcpflags_num_to_str {
+    my $flagnum= shift;
+    return '' unless defined($flagnum);
+    my $str= '';
+    $str.= ($flagnum & 0x80) ? '1' : '*';
+    $str.= ($flagnum & 0x40) ? '2' : '*';
+    $str.= ($flagnum & 0x20) ? 'U' : '*';
+    $str.= ($flagnum & 0x10) ? 'A' : '*';
+    $str.= ($flagnum & 0x08) ? 'P' : '*';
+    $str.= ($flagnum & 0x04) ? 'R' : '*';
+    $str.= ($flagnum & 0x02) ? 'S' : '*';
+    $str.= ($flagnum & 0x01) ? 'F' : '*';
+    return $str;
+}
+
+sub numtext {
+    my $num= shift;
+    return $num if defined($num);
+    return '';
+}
+
+1;

@@ -1,12 +1,8 @@
-# snortsnarf
-
 README file for SnortSnarf v1.0
 ------------------------------------
 
-Welcome to the release of SnortSnarf v1.0 now hosted on github: https://github.com/ebdavison/snortsnarf).  This project was recently moved from SourceForge and the original pages ar still there: http://www.sourceforge.net/projects/snortsnarf/.  
-
-
-This program creates a
+Welcome to the release of SnortSnarf v1.0
+(http://www.sourceforge.net/projects/snortsnarf/).  This program creates a
 set of HTML pages to allow you to quickly and conveniently navigate around
 alerts output by the Snort intrusion detection system (http://www.snort.org/).
 
@@ -29,10 +25,8 @@ ownership and responsible parties.
 
 
 Ed Davison
-edavison@gmail.com
+edavison@sourceforge.net
 
-
-Original Documentation
 ----------------------------------
 
 

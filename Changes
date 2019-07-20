@@ -1,0 +1,422 @@
+Thanks for everyone's suggestions and contributions, even if we were not
+able to include the changes so far.
+
+
+Changes in SnortSnarf version 021111.1 (from 021024.1)
+------------------------------------------------------
++ fixed some file newline problems in last distribution (reported by
+    Robert Young)
++ fixed a compatibility problem with Win32 (reported by different people)
++ alerts with original packet included now have both sets of ports and
+    first set of IPs as links
+
+
+Changes in SnortSnarf version 021024.1 (from 021017.1)
+------------------------------------------------------
++ fixed bug which caused SnortSnarf to hang forever if no output directory
+   was given or if it was relative (reported by Wes Dorale)
++ fixed a couple compatibility problems with Win32 (reported by different
+   people)
++ added -obfuscateip option to change the IP addresses in alerts to randomly
+   (but consistently) chosen alternates (not presently available for database
+   input)
++ updated -usage text and Usage file
+
+
+Changes in SnortSnarf version 021017.1 (from 020516.1)
+------------------------------------------------------
++ Updated parsing for Snort 1.9.0 full alert files
+  + works around bug in which sometimes there is no blank line between
+    alerts [thanks to Tomoyuki Murakami for the contrib]
+  + works around bug in which there is sometimes an extraneous blank line
+    in the middle of an alert (e.g., after NEXT LINK MTU)
+  + now understands Xref sections in the form '[Xref => system id]'
+  + removes any '\0' (^@) that was at the end of lines (e.g., at the end
+    of ADMINISTRATIVELY PROHIBITED HOST FILTERED lines)
++ new-style Spade reports now processed (Spade version 021008.1 and on)
++ spp_portscan2 log files now processed (these entries are displayed
+    somewhat prettified)
++ updated linking to ICMP log files; this involved updates for new ICMP
+    header format in Snort 1.9.0
++ more robust recognition of non-packet alerts in different formats (these
+    get ignored)
++ clarified warning about unknown ICMP type text and added repeat warning
+    suppression (you'll now only get a warning about a particular string
+    twice)
++ arachNIDS reference URLs now are to www.whitehats.com instead of
+    whitehats.com
++ McAfee reference URL updated
++ SnortSnarf will now ignore lines beginning with '#' between alerts, so
+    you can use that to begin a comment
+
+
+Changes in SnortSnarf version 020516.1 (from 020316.1)
+------------------------------------------------------
++ SnortSnarf can now read from a Snort Mysql database; the SnortDBInput
+module is written and maintained by Ed Davison (Ed.Davison@bus.utexas.edu)
++ new -mintime=<time> and -maxtime=<time> let you control the time range of
+alerts you want included in the output [Ed Davison helped with this]
++ new -Xsid lets you exclude alerts from certain snort ids from being
+displayed
++ -usage option added
++ -modpath will show you the directories that SnortSnarf tries to gets its
+included files from and shows you which seem to have SnortSnarf components
+in them
++ -v shows the SnortSnarf version number
++ removed redundant listing of "top" links on start page [spotted by Russell
+Fulton]
++ documentation updated and Usage file improved
+
+
+Changes in SnortSnarf version 020316.1 (from 020126.1)
+------------------------------------------------------
++ sid now parsed from alerts and used to produce a link to the snort.org
+signature database; this link is often the most featured one [contrib by
+Owen Crow; thanks to Brian Caswell for organizing the signature database
+effort and allowing SnortSnarf to link to it]
++ -dns now takes an argument, an network address within IP addresses will be
+resolved (you might set this to your local network to have these addresses
+look up quickly) [contrib by Russell Fulton]
++ better warnings when an input file does not exist, is length 0, or could
+not be opened
++ earliest/latest times (printed on the top of pages) can now be shown in
+year/month/date order (-ymd option) [based on contrib by Russell Fulton]
++ updated SnortFileInput to parse IPV6-* protocol type
++ updated SnortFileInput to not include interface name as part of the
+signature when using -I with full or fast alert formats [contrib by Andreas
+Ostling]
++ new warning when you are using the default input file
++ snort -g users: you can now have the earliest/latest times listed in your
+local time (-gmt option) [contrib by Russell Fulton]
++ updated the documentation 
+
+
+Changes in SnortSnarf version 020126.1 (from 020124.1)
+------------------------------------------------------
++ fixed -ldir and -onewindow (accidently disabled in last release)
++ signature links are now present from the alert text, even if the sid text
+is given
++ "Fresh grab" and SISR "add alerts" links now give a choice of including
+alerts not covered by the current input filter (e.g., -minprio) or not
++ -windows accepted as equivalent to -win
++ updates some docs
+
+
+Changes in SnortSnarf version 020124.1 (from 010821.1)
+------------------------------------------------------
++ added top N most active sources and destinations pages which including IP
+involvement breakdown summaries (N adjustable with -top=N; default 20)
+(multiply requested feature)
++ signature priority # and classification text displayed in pages
++ signature list now sorted primarily by priority # unless -sortsigcount1st is
+given (-rs still reverses listing order) (use -hiprioisworse if a higher
+priority number means a higher priority to you)
++ new -minprio=P option causes alerts with priority lower than P to be ignored;
+this could be used to filter out informational messages for a run
++ new -sipin=cidr option restricts alerts presented to those that have a source IP in
+the given CIDR specified net
++ new -dipin=cidr option restricts alerts presented to those that have a dest IP in the
+given CIDR specified net
++ added a small top-level navigation table to the top of each page for quicker
+browsing
++ updated RIPE link (thanks to Laurent Monin and Olaf Gellert)
++ added lookup links into dshield.org and Sam Spade for an IP
++ made anomaly scores in Spade alerts bold for quicker scanning
++ changed order of listing among reference links
++ input files can now be interspersed with options on the command line
+(previously they needed to be after all the options)
++ cleaned up some HTML
++ updated the documentation 
+
+
+Changes in SnortSnarf version 010821.1 (from 080101.1)
+------------------------------------------------------
++ changed version numbering from DDMMYY to YYMMDD to be more clear
+internationally and to sort better
++ added parsing of Snort 1.8.1 syslog format
++ switched port lookup site to http://www.portsdb.org/ and now passes protocol
+to the lookup for more specific results
++ fixed issues with refresh tag generated by -refresh that occasionally caused
+problems
++ added recognition of Spade alerts when Spade's -corrscore option is used
++ moved command line parameter description from the the top of snortsnarf.pl
+to the Usage file (finally, and thanks to Gary Grim for the push)
+
+
+Changes in SnortSnarf version 080101.1 (from 052301.1)
+------------------------------------------------------
++ new Snort 1.8 rule id tags in signature name now removed from the signature
+string [contrib by Chris Green]
++ parse the Snort 1.8 {TCP} type of indication if fast alert and syslog
+format; with this protocol information now available, logs links can now be
+made for those formats [based on contrib by Chris Green]
++ updated port lookup URL since the old one stopped working
++ added -rs option to reverse the normal sorting of signatures on the
+signature index page so that the most active is first
++ added -win option for those running under windows to use; it is equivalent
+to setting the $os variable to 'windows'.
+
+
+Changes in SnortSnarf version 052301.1 (from 052101.1)
+------------------------------------------------------
+
++ restored correct parsing of portscan logs; was broken in the last release
+due to generalizing the syslog formats accepted
++ restored space accidently removed before the '->' in alerts shown in the
+HTML
++ removed some warning messages that were not too helpful
+
+
+Changes in SnortSnarf version 052101.1 (from 051601.1)
+------------------------------------------------------
+
++ fixed 'unmatched [] in regexp' problem under windows
++ actually included support for the variation on syslog formatting that I
+announced last time but forgot to put in the released package
++ classification/priority lines in fast alerts now disregarded in parsing
+[contrib by Chris Green]
+
+
+Changes in SnortSnarf version 051601.1 (from 041501.1)
+------------------------------------------------------
+
++ fixed the full qualification of input files under Windows
++ fixed a bug when using -rulesdir and -rulesfile with a path under Windows
++ fixed a couple warning messages often encountered when using -homenet
++ restored port lookup links (was not being generated due to a bug)
++ optimized additional accesses to HTMLMemStorage (should speed up run time,
+especially for large inputs)
++ Xref lines in full alerts now scanned for links to include on signature
+pages
++ classification/priority lines in full alerts now disregarded in parsing
+[based on contrib by Craig Barraclough]
++ added support for another variation on syslog format
++ fixed generation of Silicon Defense logo on Windows
++ now ensures all chosen signature page names are unique
++ added note in README about installing the time modules under Windows
+
+
+Changes in SnortSnarf version 041501.1 (from 040901.1)
+------------------------------------------------------
+
++ eliminated warnings when running snortsnarf.pl without -rulesfile
++ improved treatment of alerts without a (parsed) signature, source IP, and/or
+destination IP
++ added compatibility with Solaris 8 syslog format and now skips over
+interfaces printed in syslog format under snort -I [based on contrib by Benny
+Jones]
++ added -rulesscanonce option to scan the rules files only once to decrease
+CPU use at the cost of increased memory usage
++ improved sanity checking of some command line arguments
++ removed a debugging statement from MemStorage
++ clarified documentation about needing to install the Time modules
+
+
+Changes in SnortSnarf version 040901.1 (from 040701.1)
+------------------------------------------------------
+
++ fixed the anom dests page to actually show the destinations [spotted by Ralf
+Hildebrandt]
++ fixed SnortSnarf version number displayed on pages (was incorrect in
+040701.1) [spotted by Ralf Hildebrandt]
++ fixed bug where an "add some of both types" SISR link would sometimes be
+created only if there was one type of alert
+
+
+Changes in SnortSnarf version 040701.1 (from 011601.1)
+------------------------------------------------------
+
++ modularized SnortSnarf (massive modification of code)
+  + http://www.silicondefense.com/software/snortsnarf/modularized/
+  + interface and HTML produced is largely unchanged
+  + old SnortSnarf pieces split into modules
+  + ways to select and parameterize other modules (when they become available)
+  still in the works
+  + enhanced SISR and text4sel.pl to use alerts from arbitrary input modules
++ enhanced ability to gather reference information to make external links by;
+specifically if the -rules* option provides your rules, SnortSnarf will
+examine rules in them for reference rule options (e.g.,
+"reference:arachnids,212") [by popular demand]
++ signature index page and signature pages now provide links to all known
+reference URLs for the signature
++ signature page names should be more consistent across runs since it is now
+based on reference information wherever possible
++ updated Princeton DNS lookup link, removed Riherds (was 404'ing)
++ year can now be inferred even when alert does not provide it; mode selected
+by new -year option; default is to assume it is from within the previous 12
+months; also available is the current year or a specific year
++ year now shown on displayed dates (except perhaps in the displayed alerts)
++ fixed the pop-up menu for annotation access to display correctly on all
+browsers [contrib by Yoann Le Corvic]
++ now includes the nmaplog-dns.pl script by HD Moore (linked to by nmap2html)
++ a few wording changes to reflect the fact that alerts (as defined internally
+to SnortSnarf) might contain more than one packet (although no input source
+provides this type of packet currently)
++ de-tabbed source files for better reader friendliness
++ updated user and some internal documentation
+
+
+Changes in SnortSnarf version 011601.1 (from 111500.1)
+------------------------------------------------------
+
++ fixed ordering of port numbers in links to log file names; should be always
+correct now [spotted by Mark Rolands]
++ adjusted parsing of Snort alerts for ICMP to support Snort 1.7 alert format;
+this eliminates the warning messages [spotted by Jim Forster and Etienne
+Lequeux]
+
+
+Changes in SnortSnarf version 111500.1 (from 102700.1)
+------------------------------------------------------
+
++ syslog "last message repeated ..." messages now ignored without complaint
++ Ethernet addresses now parsed more correctly
++ fixed parsing of spp_portscan lines that have a trailing space
++ SISR: for getting the set name from a file, case where it was not found is now handled
++ other minor changes to the code
+
+
+Changes in SnortSnarf version 102700.1 (from 102600.1)
+------------------------------------------------------
+
++ modified alert parsing to accept latest version of the full alert format
+as well as the old version
++ added check to make sure snortsnarf.pl is using correct version of
+snort_alert_parse.pl
+
+
+Changes in SnortSnarf version 102600.1 (from 100400.1)
+------------------------------------------------------
+
++ cleaned up page headers and footers for improved readability; Silicon
+Defense logo now present in header (GIF file auto-generated)
++ eliminated need to specially name alert files in different formats; alert
+format is now automatically inferred (finally!)
++ generated pages now split across multiple directories to reduce the load
+on any one directory [suggestion by Chris Green and Dread Pirate Roberts]
++ added option (-refresh=X) to add HTML that causes generated pages to
+reload in your browser every X seconds [suggestion by Dave Schwinn]
++ ./include now searched by snortsnarf.pl (but not any CGIs) for its
+includes [contrib by Alvar Freude]
++ added TRIUMF as a DNS lookup option
++ fixed bug where certain pages were referenced as .html even if $html was
+set to 'htm' instead
++ new default input file for Windows [contrib by SilverDragon]
++ changes in SISR to better permit labeled set and incident files to be
+rolled over
++ SISR: automatic IP and network annotations upon labeled set creation now
+includes a link to view the labeled set
++ SISR: fixed bug in earliest_latest_times.pl in finding the latest time
+
+
+Changes in SnortSnarf version 100400.1 (from 090700.1)
+------------------------------------------------------
+
++ new link on alert pages to run a new CGI script to show an updated list
+of alerts as text (if -cgidir option is given)
++ 3 DNS lookup sites now linked to from host pages (sites contrib. by Jim
+Forster)
++ added www.snort.org port lookup links to displayed alerts (contrib. by
+Mike Biesele)
++ added wrap=yes to TEXTAREAs in SISR and annotations to improve wrapping on
+some browsers.
++ for "see also" links, counts of alerts on other page now included
++ now lists number of distinct IPs on alert pages
++ corrected log file naming for Win32 snort (contrib. by silverdragon)
++ nmap2html: improved page heading (contrib. by Sean Boran)
++ nmap log page links now grey colored
++ internal tidying up of record keeping
+
+
+Changes in SnortSnarf version 090700.1 (from 072700.1)
+------------------------------------------------------
+
++ added special handling of alerts from the Spade anomalous event sensor
+including a specialized section of the pages
++ CIDR specification of networks now supported for -homenet
++ for pages listing alerts, a summary of the alert types is now presented at
+top of page
++ Geektools now added as an IP lookup option (contrib. by Dr. Paul Mitchell)
++ arachNIDS links are now generated even if IDS### is not at the start of
+the alert message
++ added new SISR module set_flags.pl to summarize protocol flags and added
+corresponding details to the example config file
+
+
+Changes in SnortSnarf version 072700.1 (from 062000.1)
+------------------------------------------------------
+
++ added capacity for annotations about networks and pages about IP address
+have a link to view/add annotations for their /16 and /24 networks
++ when an alert set is created in SISR, annotations noting this are
+automatically added with the source IPs and source networks in the set
+  + this is an aid in checking for earlier activity from the same host or
+  network;
+  + new module to do this included in distr. and added to sisr_modlist
+  + new config file parameter (ann-db-loc) documented in README.SISR
++ clearing the output directory now uses Perl routines rather than system
+commands and only clears files that look like it created in an earlier run;
+this allows people to keep, e.g., .htaccess, files in the directory
++ random access to annotations now available from a form at the bottom of
+the main page
++ bug fix: spp_portscan lines now filtered from syslog input files
+
+
+Changes in SnortSnarf version 062000.1 (from 041700.1)
+------------------------------------------------------
+
++ nmap2html tool included which generates HTML pages from nmap output files;
+these can be linked to from the main SnortSnarf pages (-nmap* options)
++ IPAddrContact.pl included to look up contact e-mail addresses for an IP
+address using whois databases
++ added SISR as an experimental feature; starting with a SnortSnarf alert
+page SISR will let you send custom e-mail reports about an incident
++ snort rules that generate a signature found from snort rules files and
+included on that signature's page; included files and relocated file
+supported (-rules* options)
++ if an IP address is a source in some alerts and a destination in others, a
+link to the other page is generated
++ external whois lookup links now opens a new window unless -onewindow
+option is given
++ fixed log links produced for alerts for 'TTL EXCEEDED' packets
++ fixed bug in -homenet argument processing causing it the option not to
+work sometimes
++ some minor fixes and improvements to generated HTML
++ now correctly displays newlines added as part of annotations
++ updated documentation
+
+
+Changes in Snortsnarf version 041700.1 (from 041000.1)
+------------------------------------------------------
+
++ fixed "off by one" bug in long alert listings
++ input files with 'messages' in the name are now treated as being generated
+by syslog
++ added "-g group" option to fix_perms.pl to change the file and directory
+group to the given group and change the permission to group readable
++ added "-g group" option to setup_anns_dir.pl to set the group of the
+created files and directory to the given group and set the permission to
+group writable
++ scattered changes to the documentation
+
+
+Changes in Snortsnarf version 041000.1 (from 031800.1)
+------------------------------------------------------
+
++ added support for -Afast and syslog'ed snort alerts
++ added linking to the appropriate snort log file from alerts on snortsnarf
+pages (-ldir option)
++ added support for recording and viewing of notes about IP addresses and
+snort messages, allowing you to build up a knowledge base (stored in an
+external XML file, accessed by included CGI scripts) (-db option)
++ added optional use of rotating color background for alert listings -- the
+color changes if the source, dest, or alert message changed from the
+previous; helpful in looking over long listings (-color option)
++ long listings of alerts (sometimes slow to load) now split into segments on
+different pages, once a specified threshold is reached (-split option)
++ added more internal links in the generated pages -- from displayed alerts
+to source and destination IP address pages and to the page for a certain
+snort message
++ added ability specifying the name of the output directory (-d option)
++ improved some of the HTML generated
++ now released under GNU General Public License

@@ -1,0 +1,375 @@
+-----===== Using SnortSnarf (updated: 24 October 2002) =====-----
+
+This document is intended as introductory reading about SnortSnarf and
+cohesive documentation about using its advanced features.  See README for
+information about installation.  See the top the utilities for information
+about their particular command line arguments.  See README.nmap2html for how
+to use nmap2html and README.SISR on how to use SnortSnarf Incident Storage
+and
+Reporting.
+
+A full list of snortsnarf.pl command line is at the end of this document.
+
+----==== Basic Usage ====----
+SnortSnarf is run over one or more output destinations from Snort and these
+are converted into web pages.  The input sources are given at the end of on
+the command line when snortsnarf.pl is run.  Two modules are provided to
+read input into SnortSnarf: SnortFileInput and SnortDBInput.
+
+SnortFileInput read alerts from Snort's alert output files.  The following
+formats are understood:
+
++ Snort alerts files (either standard or -A fast type)
++ syslog files containing some Snort entries
++ spp_portscan log files
++ spp_portscan2 log files
+
+These can be mixed and matched within a file.  Specify a file by its
+absolute or relative path.
+
+SnortDBInput reads alerts from a Mysql Snort database.  Specify inputs in the form
+user:passwd@dbname@host:port.  "@dbname" is optional and defaults to a
+database name of "snort".  ":port" is optional and defaults to 3306.  If you
+omit a password, you will be prompted for one.  SnortDBInput is
+supported and maintained by Ed Davison (Ed.Davison@bus.utexas.edu).  Direct
+any questions to him.  His web page for the module:
+  
+  http://www.bus.utexas.edu/services/cbacc/dbsupport/snortdbinput/
+
+This generates an integrated set of HTML files in a certain directory
+(snfout.<file1> unless -d is used).  You want to view these pages with a web
+browser, starting with index.html.  The directory should be visible by a web
+server using "http://" if you want to use the annotation feature (described
+below), SISR or text4sel.  Otherwise you can use "file://".
+
+The rest is pretty intuitive; the links take you around the pages generated
+from the log and to a few external sites for more information.  Take a look
+around.
+
+The background of alerts is colored (unless you use -color=no).  This
+feature is intended to make the long listings of alerts easier to parse. 
+The color will stay the same from one alert to the next until one of the
+following changes:  the Snort message (signature), the source IP, or the
+destination IP.
+
+
+----==== Log file linking ====----
+As an option, you may have SnortSnarf generate links to Snort log files. The
+links will appear next to displayed alerts that have corresponding entries
+in the log files (or at least they are expected to).  We find this feature
+saves alot of time in trying to find out the content of a packet that
+generated an alert, being able to just click on the link to the log entry
+and have the log file appear in the browser.
+
+In order to use this, your log directory must be visible to your web
+browser. This means either having it be part of what your web server
+provides or available via your file system.  Also, your log files and
+directories must have appropriate permissions to be viewed by your browser. 
+ You might use the fix_perms.pl utility that is included in this
+distribution to do this.
+
+Give snortsnarf.pl the -ldir <URL> option to enable this linking, where
+<URL> is the URL to the base directory for your log files.  Since Snort
+bases its decision on where to log alerts to on what your home network is,
+you must tell SnortSnarf this via the -homenet network option.  The default
+is that you have no home network.
+
+----==== Rule inclusion and reference links ====----
+If snortsnarf.pl is given the -rulesfile option, then it will search through
+your Snort rule files to find rules with a given signature.  These rules are
+then shown on the page for alerts with that signature.  The idea here is to
+allow you to easily see what caused the alerts to be generated.  There is a
+bonus if you have a "pass" rule related to an "alert" rule and the signature
+is the same (such as would be the case if you modified the text for an alert
+rule to disable it for certain cases).  The pass rules will be displayed as
+well.
+
+In addition, SnortSnarf will search these rules for reference information
+about the alerts in your source file.  If any references are found and URLs
+are available, links are provided on the signature index page (the start
+page)) and signature pages.  In addition, if the alert signature contains
+the text IDSxxx, this is assumed to an arachNIDS reference number.
+
+The argument with the -rulesfile is your starting rule file (e.g.,
+snort.lib).  Files included by this rule file (and their rule files) are
+parsed as well.  The rules found for signature are displayed in the order
+that they are found in the file (following includes immediately).
+
+To support the relocation of rules files (perhaps you make a copy of the
+rules you used on a given day), the -rulesdir option is provided.  Its
+argument is a directory in which all rule files are to be found, even if a
+different directory is found in a file off of the command line.
+
+----==== Input filters ====----
+You can tell SnortSnarf to ignore certain alerts that it finds in your input
+sources.  This is done using input filters.  There are currently input
+filters to select alerts based on time, priority and IP address.  These
+command line options are input filters (see their documentation below):
+
+    -minprio, -mintime, -maxtime, -sipin, -dipin, -Xsids
+
+An alert must pass each filter in place to appear in SnortSnarf's output.
+
+Using input filters reduces the number of alerts that appear in your output.
+Another possible advantage is improved run time.  While in most cases input
+filters do not enable SnortSnarf to not read in an alert that does not match
+the filters (SnortDBInput and -mintime or -maxtime being the excpetion), the
+alert does not need to be retained in memory, correlated/sorted, or output. 
+If SnortSnarf is running slow because you have having to use swap memory,
+having fewer alerts to retain will decrease your memory use.
+
+----==== Annotations ====----
+Your may tell SnortSnarf to produce pages that are integrated with a
+specified annotation database by using the -db <annfile.xml> option, where
+<annfile.xml> is the full path to your annotation database file.  An
+annotation database is a file external to Snort and SnortSnarf that holds
+your knowledge about a particular IP address or Snort message.  You may have
+an arbitrary number of notes about any IP address or message.
+
+With this feature on, you will find a link to view and edit annotations for
+a snort message on the page for that message and to view and edit
+annotations for an IP address on the pages for that IP address (both when it
+is a source and a destination).  These links will show you the current
+annotations (if any) and give you the option to add a new annotation.  After
+you submit a new annotation, you will be shown the updated annotations.
+
+The annotation database is not read when SnortSnarf.pl is run.  Rather a
+couple CGI scripts included with the distribution take care of this
+dynamically.  Put these in a directory where the will be executed by your
+server as CGI scripts.  You will need to give the -cgi URL option unless
+your CGI directory can be reached from your generated pages by "/cgi-bin/".
+
+Your annotation database file needs to be writable by the server when it is
+executing the scripts.  In fact, since the database is backed up before it
+is updated, the directory also needs to be writable by the server.  We
+recommend creating a special directory with the appropriate access
+permissions to hold your annotation database(s) using the setup_anns_dir.pl
+utility included in this distribution.  To create just an "empty"
+annotations database file, you can make a copy of new-annotation-base.xml in
+the top level of the distribution.
+
+There is no way at present to edit or delete annotations in the database
+using online methods.  You can use an XML editor to do this or just a plain
+text editor.  The format should be straightforward.
+
+The annotation feature requires the XML::Parser Perl module, available from
+CPAN:
+    http://www.perl.com/CPAN-local/modules/by-module/XML/
+and the CGI.pm module included with the Perl distribution.
+
+----==== Command line options ====----
+These are the command line option available in the current version of
+SnortSnarf.  This is organized into subsections for your convenience.
+
+--== General configuration ==--
+-d directory
+    directory is the path to the directory the HTML pages will be generated
+in, overriding the default.
+
+-win
+    run in windows mode.  You can also change $os in snortsnarf.pl to be
+'windows' for the same effect.
+
+-hiprioisworse
+	If this option is given, higher priority numbers are considered to mean
+higher priority for sorting and -minprio.  Otherwise lower priority numbers
+are considered to be of higher priority.  This default is the default for the
+snort ruleset as of this writing, however counterintuitive that might be.
+
+-cgidir URL
+    URL is the location of the cgi-bin directory that CGI scripts than go
+along with the program are stored.  This may be relative to the pages that
+are generated (so that when a link appears on a page with URL as a prefix,
+it will be valid).  "/cgi-bin" is the default.
+
+-homenet network
+    network is the network IP address or CIDR network notation for your home
+network, as told to snort with -h.  CIDR takes that standard form of
+address/masksize (sizes 0-32 supported).  In the other form, 1-3 zeros at
+the end of the address are assumed to be what varies within your network.   
+If this argument is not provided, the home network is assumed to be 0.0.0.0
+(no home).  This is currently used only with the -ldir option.
+
+--== Output augmentation ==--
+-ldir URL
+	URL is the URL of a base directory in which the log files usually found
+in /var/log/snort are living, With this option, SnortSnarf will generate
+lots of links into those files based at that URL.  Eg: with -ldir
+"http://host.name.here/logs" we get links like
+http://host.name.here/logs/10.0.0.1/UDP-137-137. Note that the logs
+themselves aren't parsed.
+
+-dns [network]
+	This will cause the script to lookup the DNS name of IP addresses and
+show it on your IP pages.  If you try to look up external addresses on a
+large alert file, this will take a very long time and will hammer your DNS
+server.  So, a network can be specified in CIDR format and only IP addresses
+that fall within that network will be looked up; the idea here is to set
+this to your local network and get fast lookups.  If no network is
+specified, all IPs will be resolved.
+
+-rulesfile file
+    file is the base rule file (e.g., snort.conf) that snort was run with.
+If this option is given, the rules in that file (and included files)
+generating a signature  are included in the page for that signatures alerts.
+In addition, the rules are scaned for references to arachNIDS, Bugtraq id's
+etc. to produce URLs.  Note that the processing of the rule files are fairly
+rough. E.g., variables are ignored.
+
+-rulesdir dir
+    dir is a directry to use as the base path for rules files rather than
+the one given or the paths listed in include directives.  (Useful if the
+files have been relocated.)
+
+-rulesscanonce
+    When used with -rulesfile, this flag requests that the rules files be
+read only once.  This will speed up run time, but will increase memory usage
+since the rules in those files will need to be retained in memory for future
+use.
+
+-db path
+    path is the full path to the annotation database (an XML file), from the
+point of view of the server hosting the CGI scripts that access it, or the
+empty string to not use an annotation database.  The default is to not use
+it.
+
+-sisr configfile 
+    Generate links with SnortSnarf Incident Storage and Reporting (SISR).
+The argument is the full path to the SISR configuration file to use.  This
+file is not parsed by SnortSnarf.pl.
+
+-nmapurl URL
+    URL is the URL of a base URL directory in which the html output of
+ running nmap2html on nmap output is living. With this option, SnortSnarf
+will generate links to that output for IP addresses.  If the path to that
+directory is given with the -nmapdir option, then only those pages that
+actually exist (at the time SnortSnarf is run) are linked to.
+
+-nmapdir dir
+    dir is the directory on the file system in which nmap2html output is
+stored.  When the -nmapurl option is given, this is used to verify that a
+nmaplog.pl page actually exists before linking to it.
+
+--== Output control ==--
+-color=<option>
+    option is 'yes' or 'no' or 'rotate'.  The style of coloring is given by
+the option if any.  'rotate' is the only style currently available.  This
+changes the background color between an alert/portscan report and the next
+one iff the next one has a different message (signature) source host, or
+destination host.  If 'yes' or this not given on the command line, the the
+default ('rotate' in this version) is used.  Also controls whether the
+colors are varied in top N tables.
+
+-top=<quantity>
+    Sets the N for the top N source and destinations pages.  Default is 20.
+Note that all IPs within the same rank will always be shown together even if
+it pushes the number listed above N.
+    
+-onewindow
+    If this option is given, certain URLs will not be targeted to other
+browser windows as is the default.
+
+-rs
+    If this option is given, reverses the order of signature listing on the
+first page so that the most interesting signatures appear first.
+    
+-refresh=<secs>
+    add a refresh tag to every HTML page generated, causing browsers to
+refresh the page every <secs> seconds.
+
+-split=<threshold>
+    To speed up display of pages containing lots of alerts, <threshold> is a
+maximum number of alerts to display on a page unless explicitly requested. 
+Instead the alerts are broken into several pages.  Default is 100.  Can be
+set to 0 to never split the list alerts being displayed.
+
+-ymd
+	Providing this option causes dates to be displayed in year/month/day
+format rather than month/day/year format.  This does not affect the display
+of dates inside alerts.
+    
+-gmt
+	Users of snort -g (put alerts in GMT format), consider using this.  This
+will display times adjusted from GMT to your local timezone.  This does not
+affect the display of times inside alerts.
+    
+-obfuscateip
+	This option causes IP address that are part of file alerts to be changed
+to randomly chosen ones for the purpose of anonymization.  The same IP
+address will always (during a single run) be given the same IP address.  IP
+address originally in the same class A address will remain in the same class
+A, but with a different network address.  Likewise for class B and class C. 
+This option does not change anything on disk, so log linking, "fresh grab",
+SISR, and nmap linking will not work as expected.  Neither will external
+lookups regarding an IP address.  This option is not presently available for
+SnortDBInput inputs.
+
+--== Input filters ==--
+-minprio=<threshold>
+	If given, sets the minimum priority threshold to given value.  Alerts
+with a lower priority than this specified would not be included in the HTML
+pages. Alerts with no priority assigned are included.  By default, priority
+numbers above the given threshold are dropped, but this changes to "below"
+if -hiprioisworse is also given.
+
+-mintime=<time>
+    If given, no alerts before the given time will be shown, even if they
+exist in the input sources.  Many formats are accepted for the time
+specification are accepted courtesy of Time::ParseDate, including relative
+specifications.  Just try one, or see the list in the documentation (e.g.,
+'man Time::ParseDate').  Don't forget to quote any spaces you have in the
+specification.
+
+-maxtime=<time>
+    If given, no alerts later than the given time will be shown, even if
+they exist in the input sources.  Any formats for the time specification
+accepted by Time::ParseDate are acceptable.
+
+-sipin=<network>
+    If given, sets the required source network to given CIDR specified
+network.  Alerts without a source IP in the given network are ignored.  The
+specification of the form x.x.x.x/n for a network or x.x.x.x for an IP.
+
+-dipin=<network>
+    If given, sets the required destination network to given CIDR specified
+network.  Alerts without a destination IP in the given network are ignored. 
+The specification of the form x.x.x.x/n for a network or x.x.x.x for an IP.
+
+-Xsid=<sid>[,<sid>]
+	If given, alerts that have a snort id (sid) in the given list are
+excluded from the output.  Alerts whose snort id is not known to SnortSnarf
+are not excluded.
+
+--== Input configuration ==--
+-year=<opt>
+    Defines how to infer the year of an alert when its format does not
+provide this information; possible values of <arg> are:
+ + 'cur': assume the current year
+ + 'rec': assume the alert was from within the last 12 months (the default)
+ + a year: use the specified year (e.g., 2000)
+
+--== Diagnostics (no alert processing is done) ==--
+-modpath
+    This will will show you the directories that SnortSnarf tries to gets
+its included files from, in order.  This will also indicate which of these
+seem to have SnortSnarf components in them.
+
+-v
+    This shows the version number for your snortsnarf.pl file.
+
+-usage
+    Give a summary of how to use snortsnarf.pl.
+
+
+----==== Contributions ====----
+We welcome your complaints, kudos, and especially improvements and bugfixes.
+ 
+We wish for this to be a useful as possible, so your feedback and assistance
+is important.  You may reach us at hoagland@SiliconDefense.com.
+
+Thank you and happy SnortSnarfing!
+
+-- Jim Hoagland (hoagland@SiliconDefense.com)
+   Stuart Staniford (stuart@SiliconDefense.com)
+
+

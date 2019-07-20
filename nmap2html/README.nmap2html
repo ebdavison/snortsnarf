@@ -1,0 +1,61 @@
+This is the README file for nmap2html, by Joe McAlerney and James Hoagland,
+June 14, 2000
+
+-= Overview =-
+
+nmap2html is essentially a stripped down version of nlog [1] that has been
+modified for use with the SnortSnarf application [2]. It is a utility that
+converts nmap logs (in a flat file format) to an html file structure.  There
+is a HTML page for each IP address and an index page; these are
+cross-linked.  You may resolve the IP address in real time.
+
+-= Setup =-
+
+Included with the nmap2html utility is the essential log2db.pl script that
+converts nmap output (generated with the -oM option) to a flat file format. 
+The newly created flat file, and the original nmap output file will then be
+fed into nmap2html to produce the desired html pages.  The original file
+must be used again, because certain components of it are not extracted with
+the log2db.pl utility.
+
+1) Place the nmaplog-dns.pl file in your webserver's cgi-bin directory. 
+From the root of your webserver, it _must_ be placed in /cgi-bin  If you
+choose not to place it in this directory, you may edit the nmap2html.pl
+file, and change the $cgidir variable value to reflect the location of the
+cgi-bin directory on your webserver.
+
+2) Execute the following.
+
+# log2db.pl <nmap output file> <target file>
+# nmap2html <nmap output file> <target file>
+
+Where <nmap output file> is the file produced by nmap (with the -oM option
+remember), and <target file> is a flat file name that you specify.  <target
+file> is the same for both commands.
+
+This will pour html files into your current directory, so you may want to
+execute nmap2html in a directory that is accesable to your web server.
+
+-= Using with SnortSnarf =-
+
+nmap2html can be used stand-alone or can integrated with the SnortSnarf
+program.  To have snortsnarf.pl generate links to nmap2html output, give it
+the -nmapurl and -nmapdir options.  See that program's documentation for
+more details.
+
+-= Credits =-
+
+[1] Nlog - Author: HD Moore - http://www.secureaustin.com/nlog/
+         - pieces of nlog.pl have been borrowed.
+         - log2db.pl has been borrowed.
+         - nmaplog-dns.pl has been borrowd
+[2] SnortSnarf - Authors: Jim Hoagland, Stuart Staniford -
+    http://www.silicondefense.com/software/snortsnarf/
+
+
+
+
+
+
+
+

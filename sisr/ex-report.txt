@@ -1,0 +1,32 @@
+Description: Example SISR mail template (please modify)
+
+To: $semails
+Cc: $creatoremail
+Bcc: "Hidden recipient" <nobody@nowhere>
+From: $creatoremail
+Subject: Activity from $sip (incident $name)
+
+Customize this template for your report.  You define arbitrary headers above and this body is arbitrary.  To reference a field in this body or in the headers, prefix the name of the field with a dollar sign.  For a literal dollar sign, use "$$".  To get at a environmental variable from the form submission (not sure why you'd want to), prefix the name with a percent sign.  For a literal percent, use "%%".
+
+This next part of this example simply lists the fields available by default and their values.
+
+Incident name: $name
+Based on alert set: $event-set-name in $event-set-loc
+Start time: $starttime
+End time: $endtime
+Source IPs: $sip
+Source port: $sport
+Source e-mail addresses from whois as ascertained by IPAddrContact.pm: $semails
+Dest nets: $dnet
+Dest IPs: $dip
+Dest port and proto: $dport $proto
+Flags: $flags
+Incident creator: $creator
+Creator e-mail: $creatoremail
+Time created: $created
+
+This text is wrapped at 75 columns when you send it, but long words (separated by whitespace, commas and semicolons) such as URLs are never split.
+
+Kind regards,
+
+  $creator
